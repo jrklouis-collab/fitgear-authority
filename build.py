@@ -36,3 +36,44 @@ page('Page not found','<article><h1>Let’s get you back on track.</h1><p>This p
 (out/'sitemap.xml').write_text('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+''.join('<url><loc>https://fitgear-authority.netlify.app/'+str(p.relative_to(out))+'</loc></url>' for p in sorted(out.rglob('*.html')) if p.name!='404.html')+'</urlset>')
 (root/'netlify.toml').write_text('[build]\n  publish = "dist"\n\n[[headers]]\n  for = "/*"\n  [headers.values]\n    X-Content-Type-Options = "nosniff"\n    Referrer-Policy = "strict-origin-when-cross-origin"\n')
 print('Built',len(list(out.rglob('*.html'))),'pages, including',len(guides),'guides')
+
+
+# Associate shopping links: category searches, not product endorsements.
+from urllib.parse import urlencode
+associate_tag = 'fitgearauthor-20'
+shopping_queries = {
+ 'whey-protein': 'whey protein powder',
+ 'plant-protein': 'plant based protein powder',
+ 'creatine': 'creatine monohydrate powder',
+ 'pre-workout': 'pre workout supplement',
+ 'stimulant-free': 'stimulant free pre workout',
+ 'electrolytes': 'electrolyte powder',
+ 'protein-bars': 'protein bars',
+ 'budget-protein': 'protein powder',
+ 'third-party-testing': 'sports supplements',
+ 'beginner-checklist': 'protein powder creatine monohydrate',
+}
+def shop_link(slug):
+ return 'https://www.amazon.com/s?' + urlencode({'k': shopping_queries[slug], 'tag': associate_tag})
+disclosure = 'As an Amazon Associate I earn from qualifying purchases.'
+for p in out.rglob('*.html'):
+ s = p.read_text()
+ s = s.replace('There are currently no commission-earning links.', 'Amazon shopping links are paid links. ' + disclosure)
+ s = s.replace('Independent shopping guide. No paid rankings, hands-on testing claims, or active affiliate links.', 'Independent shopping guide. No paid rankings or hands-on testing claims. ' + disclosure)
+ s = s.replace('How affiliate links will be disclosed', 'Our affiliate disclosure')
+ s = s.replace('<p>FitGear Authority · Supplement shopping, explained.</p>', '<p>FitGear Authority · Supplement shopping, explained.</p><p>' + disclosure + '</p>')
+ if p.parent.name == 'guides':
+  slug = p.stem
+  shop = '<section class="calc" aria-label="Amazon shopping"><h2>Compare options on Amazon</h2><p>Browse category search results and use the checklist above to compare labels. These are shopping results, not tested picks or verified certifications. Confirm certification directly with the certifier.</p><p>' + disclosure + '</p><a class="button" href="' + html.escape(shop_link(slug), quote=True) + '" rel="sponsored noopener noreferrer" target="_blank">Browse on Amazon (paid link) ↗</a></section>'
+  s = s.replace('<h2>Sources and further reading</h2>', shop + '<h2>Sources and further reading</h2>')
+ if p.name == 'index.html':
+  for slug in shopping_queries:
+   marker = '<a href="/guides/' + slug + '.html">Read buying guide →</a>'
+   s = s.replace(marker, marker + '<p><a href="' + html.escape(shop_link(slug), quote=True) + '" rel="sponsored noopener noreferrer" target="_blank">Browse on Amazon (paid link) ↗</a></p>')
+ if p.name == 'disclosure.html':
+  a = s.index('<article>'); b = s.index('</article>', a) + len('</article>')
+  s = s[:a] + '<article><h1>Affiliate disclosure</h1><p>' + disclosure + '</p><p>FitGear Authority uses Amazon Associates shopping links. We may earn a commission when you follow a paid link and make a qualifying purchase, at no extra cost to you. Paid links are labeled beside the link.</p><p>Our links open category search results on Amazon. Inclusion in search results is not an endorsement, product test, certification, or guarantee of suitability. We do not sell rankings or claim hands-on testing.</p><p>Merchant prices, availability, formulas, and terms can change. Check the current listing and product label before buying. The merchant handles checkout, shipping, returns, and customer support.</p></article>' + s[b:]
+ if p.name == 'privacy.html':
+  s = s.replace('External sites have their own privacy practices.', 'Amazon paid links include our affiliate tracking ID so Amazon can attribute qualifying purchases. Amazon and other external sites have their own privacy and cookie practices.')
+ p.write_text(s)
+print('Added Amazon paid links using', associate_tag)
